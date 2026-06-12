@@ -128,16 +128,29 @@ app.get('/api/bypass', async (req, res) => {
     });
 
   } catch (err) {
-    // Capturamos la URL del navegador si aún existe la página
     let stuckUrl = null;
     try {
       if (page) stuckUrl = page.url();
     } catch (_) {}
 
+    const timestamp = new Date().toISOString();
+    const errorLog = [
+      '=== BYPASS ERROR LOG ===',
+      `Fecha/Hora   : ${timestamp}`,
+      `URL Original : ${url}`,
+      `URL Atascada : ${stuckUrl || 'N/A'}`,
+      `Tipo de Error: ${err.name || 'Error'}`,
+      `Mensaje      : ${err.message}`,
+      '--- Stack Trace ---',
+      err.stack || 'No disponible',
+      '===================',
+    ].join('\n');
+
     return res.status(500).json({
       original_url: url,
       stuck_url: stuckUrl,
       error: err.message,
+      error_log: errorLog,
       estado: 'error',
     });
   } finally {
