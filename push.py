@@ -42,7 +42,9 @@ def push():
         else:
             print(commit_result.stdout)
 
-        run(f"git remote set-url origin https://{GITHUB_TOKEN}@github.com/{GITHUB_USER}/{GITHUB_REPO}.git")
+        remote_url = f"https://{GITHUB_TOKEN}@github.com/{GITHUB_USER}/{GITHUB_REPO}.git"
+        subprocess.run("git remote remove origin", shell=True, capture_output=True)
+        run(f"git remote add origin {remote_url}")
         run("git push origin main")
 
         print("✅ Push completado con éxito.")
