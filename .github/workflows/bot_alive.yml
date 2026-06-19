@@ -1,0 +1,36 @@
+name: Bot Alive
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    name: Verify bot token and deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BOT_TOKEN: ${{ secrets.token_BOT }}
+      APP_URL: ${{ vars.SHADOW_PANEL_URL || 'https://void-bypass-api.vercel.app' }}
+    steps:
+      - name: Check required bot token secret
+        run: |
+          if [ -z "$BOT_TOKEN" ]; then
+            echo "Missing GitHub secret: token_BOT"
+            exit 1
+          fi
+
+      - name: Verify Discord bot session
+        run: |
+          curl --fail --silent --show-error \
+            --header "Authorization: Bot ${BOT_TOKEN}" \
+            https://discord.com/api/v10/users/@me \
+            | python -c "import json,sys; data=json.load(sys.stdin); print(f\"Bot online: {data.get('username')}#{data.get('discriminator')} ({data.get('id')})\")"
+
+      - name: Ping Shadow Panel deployment
+        run: |
+          curl --fail --silent --show-error "${APP_URL%/}/api/health"
