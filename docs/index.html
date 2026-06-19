@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Engine | Persistent Heartbeat</title>
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #00ff41;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            border: 1px solid #333;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .status {
+            margin: 1rem 0;
+            font-size: 1.2rem;
+        }
+        .log {
+            width: 80%;
+            max-width: 600px;
+            height: 150px;
+            background: #000;
+            border: 1px solid #222;
+            padding: 10px;
+            font-size: 0.8rem;
+            overflow-y: auto;
+            text-align: left;
+            margin-top: 20px;
+            color: #008f11;
+        }
+        .pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: #00ff41;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: pulse-animation 2s infinite;
+        }
+        @keyframes pulse-animation {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 65, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 65, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Shadow Engine <span class="pulse"></span></h1>
+        <div class="status" id="status">Iniciando sistema...</div>
+        <div id="last-ping">Último pulso: Nunca</div>
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.hostname.includes('github.io') 
+            ? 'https://void-bypass-api.vercel.app/api/health' 
+            : '/api/health';
+        
+        const logElement = document.getElementById('log');
+        const statusElement = document.getElementById('status');
+        const lastPingElement = document.getElementById('last-ping');
+
+        function addLog(message) {
+            const now = new Date();
+            const time = now.getHours().toString().padStart(2, '0') + ':' + 
+                         now.getMinutes().toString().padStart(2, '0') + ':' + 
+                         now.getSeconds().toString().padStart(2, '0');
+            const entry = document.createElement('div');
+            entry.textContent = `[${time}] ${message}`;
+            logElement.prepend(entry);
+            if (logElement.childNodes.length > 10) {
+                logElement.removeChild(logElement.lastChild);
+            }
+        }
+
+        async function sendHeartbeat() {
+            statusElement.textContent = "Enviando pulso...";
+            try {
+                const response = await fetch(API_BASE, { cache: 'no-store' });
+                if (response.ok) {
+                    const data = await response.json();
+                    statusElement.textContent = "Sistema: Activo";
+                    lastPingElement.textContent = `Último pulso: ${new Date().toLocaleTimeString()}`;
+                    addLog("Heartbeat exitoso - Vercel despertado");
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                statusElement.textContent = "Sistema: Error de conexión";
+                addLog(`Error: ${error.message}`);
+            }
+        }
+
+        // Ejecutar inmediatamente y luego cada 5 minutos
+        sendHeartbeat();
+        setInterval(sendHeartbeat, 5 * 60 * 1000);
+
+        addLog("Motor Shadow Engine inicializado.");
+    </script>
+</body>
+</html>
