@@ -6,31 +6,71 @@ on:
     - cron: '*/30 * * * *'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: bot-alive
+  cancel-in-progress: false
 
 jobs:
   heartbeat:
-    name: Verify bot token and deployment
+    name: Verify bot token, deployment, and workflow freshness
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      BOT_TOKEN: ${{ secrets.token_BOT }}
+      BOT_TOKEN: ${{ secrets.TOKEN_BOT }}
+      PAT_TOKEN: ${{ secrets.TOKEN_GIT }}
       APP_URL: ${{ vars.SHADOW_PANEL_URL || 'https://void-bypass-api.vercel.app' }}
     steps:
-      - name: Check required bot token secret
+      - name: Check required secrets
+        shell: bash
         run: |
+          missing=0
           if [ -z "$BOT_TOKEN" ]; then
-            echo "Missing GitHub secret: token_BOT"
-            exit 1
+            echo "Missing Actions secret: TOKEN_BOT (GitHub also accepts token_bot, Token_BOT, or Token_bot; it stores names uppercase)."
+            missing=1
           fi
+          if [ -z "$PAT_TOKEN" ]; then
+            echo "Missing Actions secret: TOKEN_GIT (GitHub also accepts token_git, Token_GIT, or Token_git; it stores names uppercase)."
+            missing=1
+          fi
+          exit "$missing"
 
-      - name: Verify Discord bot session
+      - name: Verify Discord bot token
+        shell: bash
         run: |
           curl --fail --silent --show-error \
             --header "Authorization: Bot ${BOT_TOKEN}" \
             https://discord.com/api/v10/users/@me \
-            | python -c "import json,sys; data=json.load(sys.stdin); print(f\"Bot online: {data.get('username')}#{data.get('discriminator')} ({data.get('id')})\")"
+            | python -c "import json,sys; data=json.load(sys.stdin); print(f\"Bot token OK: {data.get('username')} ({data.get('id')})\")"
 
       - name: Ping Shadow Panel deployment
+        shell: bash
         run: |
           curl --fail --silent --show-error "${APP_URL%/}/api/health"
+
+      - name: Keep scheduled workflow active monthly
+        if: ${{ github.event_name == 'schedule' && startsWith(github.event.schedule, '*/30') }}
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TOKEN_GIT }}
+
+      - name: Create monthly no-op keepalive commit
+        if: ${{ github.event_name == 'schedule' && startsWith(github.event.schedule, '*/30') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN_GIT }}
+        run: |
+          day="$(date -u +%d)"
+          minute="$(date -u +%M)"
+          hour="$(date -u +%H)"
+
+          if [ "$day" != "01" ] || [ "$hour" != "00" ] || [ "$minute" -ge "30" ]; then
+            echo "Not the monthly keepalive window; heartbeat only."
+            exit 0
+          fi
+
+          git config user.name "shadow-panel-bot"
+          git config user.email "shadow-panel-bot@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keep bot_alive workflow active [skip ci]"
+          git push origin HEAD:${GITHUB_REF_NAME}
